@@ -1216,7 +1216,7 @@ nmi_hook:
 	beq .return_normal
 
 	// Mask controller.
-	bit.b {controller_1_unknown2}
+	bit.b {controller_1_new}
 	beq .return_normal
 
 	// Check for Select + R.
@@ -1544,9 +1544,9 @@ nmi_hook:
 	lda.b {controller_1_current}
 	eor.w #$2010
 	ora.w #$2020
-	sta.b {controller_1_unknown}
+	sta.b {controller_1_previous}
 	sta.b {controller_1_current}
-	sta.b {controller_1_unknown2}
+	sta.b {controller_1_new}
 
 	// Load DMA from SRAM
 	ldy.w #0
