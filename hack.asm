@@ -33,6 +33,7 @@ eval nmi_control_shadow $7E00C3
 eval hdma_control_shadow $7E00C4
 eval current_play_state $7E00D2
 eval countdown_play_state $7E00D6
+eval controller_1_disable $7E1F63
 eval unknown_level_flag $7E1EBF
 eval state_vars $7E1FA0
 eval current_level $7E1FAD
@@ -1178,6 +1179,45 @@ title_rockman_location:
 
 {loadpc}
 
+{savepc}
+	{reorg $0885A4}
+nmi_patch:
+	// We use controller 2's state, which is ignored by the game unless debug
+	// modes are enabled (which we don't do).  Controller 2 state is the state
+	// of the "real" controller.  When the game disables the controller, we
+	// simply don't copy controller 2 to controller 1.
+
+	// Move previous frame's controller data to the previous field.
+	lda.b {controller_2_current}
+	sta.b {controller_2_previous}
+
+	// Read controller 1 port.  This is optimized from the original slightly.
+	lda.w $4218
+	bit.w #$000F
+	beq .controller_valid
+	lda.w #0
+.controller_valid:
+
+	// Update controller 2 variables, which is where we store the actual
+	// controller state.
+	sta.b {controller_2_current}
+	eor.b {controller_2_previous}
+	and.b {controller_2_current}
+	sta.b {controller_2_new}
+
+	// If controller is enabled, copy 2's state to 1's state.
+	lda.w {controller_1_disable}
+	and.w #$00FF
+	bne .resume_nmi
+	lda.b {controller_2_current}
+	sta.b {controller_1_current}
+	lda.b {controller_2_previous}
+	sta.b {controller_1_previous}
+	lda.b {controller_2_new}
+	sta.b {controller_1_new}
+.resume_nmi:
+	rts
+{loadpc}
 
 {savepc}
 	// Hook NMI
@@ -1211,12 +1251,12 @@ nmi_hook:
 
 	// Don't interfere with NMI as much as possible.
 	// Only execute when select is pressed.
-	lda.b {controller_1_current}
+	lda.b {controller_2_current}
 	bit.w #$2000
 	beq .return_normal
 
 	// Mask controller.
-	bit.b {controller_1_new}
+	bit.b {controller_2_new}
 	beq .return_normal
 
 	// Check for Select + R.
