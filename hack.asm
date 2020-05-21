@@ -755,14 +755,14 @@ copyright_string:
 	db "PRACTICE EDITION",'"'
 .practice_end:
 	db .credit_end - .credit_start, $20
-	dw $144E >> 1
+	dw $1453 >> 1
 .credit_start:
-	db "BY MYRIA AND TOTAL"
+	db "BY MYRIA, TOTAL,                  AND AKITERU"
 .credit_end:
 	db .version_end - .version_start, $20
-	dw $148E >> 1
+	dw $14CF >> 1
 .version_start:
-	db "2014-2016 Ver. "
+	db "2014-2020 Ver. "
 	db $30 + {version_major}, '.', $30 + {version_minor}, $30 + {version_revision}
 .version_end:
 	// Terminates sequence of VRAM strings.
