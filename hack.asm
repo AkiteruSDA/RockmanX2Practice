@@ -208,6 +208,18 @@ patch_disable_stage_intros:
 	bra $009708
 {loadpc}
 
+// Disable interstage password screen.
+{savepc}
+	// Always use password screen state 3, which is used to exit to stage select.
+	// States are offsets into a jump table, so they're multiplied by 2.
+	{reorg $00EF49}
+	ldx.b #3 * 2
+	// Disable fadeout, speeding this up.
+	{reorg $00EFFE}
+	nop
+	nop
+	nop
+{loadpc}
 
 {savepc}
 	{reorg $03F2E6}
