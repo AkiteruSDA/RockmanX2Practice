@@ -21,6 +21,8 @@ eval version_major 1
 eval version_minor 3
 eval version_revision 0
 // RAM addresses
+eval load_temporary_rng $7F0000
+eval rng_value $7E09D6
 eval title_screen_option $7E003C
 eval controller_1_current $7E00A8
 eval controller_1_previous $7E00AA
@@ -1386,9 +1388,22 @@ nmi_hook:
 	lda.b #$F1
 	sta.w $2140
 
+	// Save the RNG value to a location that gets loaded after the RNG value.
+	// This way, we preserve the RNG value into the loaded state.
+	// NOTE: Bank set to 00 above.
+	rep #$20
+	lda.w {rng_value}
+	sta.l {load_temporary_rng}
+
 	// Execute VM to do DMAs
 	ldx.w #.load_write_table
+.jmp_run_vm:
 	jmp .run_vm
+
+.load_after_7E_done:
+	lda.l {load_temporary_rng}
+	sta.l {rng_value}
+	bra .jmp_run_vm
 
 // Needed to put this somewhere.
 .jmp_error_sound:
@@ -1417,6 +1432,8 @@ nmi_hook:
 	dw $0000 | $2181, $8000  // WRAM addr = $xx8000
 	dw $1000 | $2183, $00    // WRAM addr = $7Exxxx  (bank is relative to $7E)
 	dw $1000 | $420B, $02    // Trigger DMA on channel 1
+	// Reload variables from 7E we didn't want to reload from SRAM.
+	dw $0000, .load_after_7E_done
 	// Copy SRAM 730000-737FFF to WRAM 7F0000-7F7FFF.
 	dw $0000 | $4312, $0000  // A addr = $xx0000
 	dw $0000 | $4314, $0073  // A addr = $73xxxx, size = $xx00
@@ -1545,7 +1562,13 @@ nmi_hook:
 	// A, X and Y are 16-bit at exit.
 	// Return to caller.  The word in the table after the terminator is the
 	// code address to return to.
-	jmp ($0002,x)
+	// X will be set to the next "instruction" in case resuming the VM
+	// is desired.
+	inx
+	inx
+	inx
+	inx
+	jmp ($FFFE,x)
 
 
 {loadpc}
