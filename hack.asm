@@ -16,11 +16,13 @@ incbin "Rockman X 2 (J).smc"
 
 
 // Constants
+eval game_config_size $1B
 // Version tags
 eval version_major 1
 eval version_minor 3
 eval version_revision 0
 // RAM addresses
+eval config_selected_option $7EFF80
 eval load_temporary_rng $7F0000
 eval rng_value $7E09D6
 eval title_screen_option $7E003C
@@ -45,6 +47,9 @@ eval spc_state_shadow $7EFFFE
 // ROM addresses
 eval rom_play_sound $008549
 eval rom_nmi_after_pushes $7E200B  // Rockman X2 has its NMI handler in RAM
+eval rom_config_button $80EB6D
+eval rom_config_stereo $80EC00
+eval rom_config_exit $80EC48
 // SRAM addresses for saved states
 eval sram_start $700000
 eval sram_wram_7E0000 $710000
@@ -632,7 +637,7 @@ route_metatable:
 
 {savepc}
 	// 640 bytes available in bank 6, an extremely-critical bank.
-	{reorg $006FD80}
+	{reorg $06FD80}
 
 initial_menu_strings:
 	// I'm too lazy to rework the compressed font, so I use this to overwrite
@@ -759,6 +764,35 @@ copyright_string:
 
 {loadpc}
 
+
+{savepc}
+	// Use config_option_jump_table instead of the built-in one.
+	// Note that we can overwrite the config table.
+	{reorg $80EB59}
+	// clc not necessary because of asl of small value
+	adc.l {config_selected_option}
+	tax
+	lda.l config_option_jump_table + 2, x
+	pha
+	rep #$20
+	lda.l config_option_jump_table + 0, x
+	pha
+	sep #$20
+	rtl
+
+	// 297 bytes available here. Mirrors $007E77 in the ROM.
+	{reorg $80FE77}
+config_option_jump_table:
+	// These are minus one due to using RTL to jump to them.
+	dl {rom_config_button} - 1
+	dl {rom_config_button} - 1
+	dl {rom_config_button} - 1
+	dl {rom_config_button} - 1
+	dl {rom_config_button} - 1
+	dl {rom_config_button} - 1
+	dl {rom_config_stereo} - 1
+	dl {rom_config_exit} - 1
+{loadpc}
 
 
 {savepc}
