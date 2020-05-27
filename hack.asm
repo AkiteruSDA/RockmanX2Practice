@@ -794,168 +794,6 @@ config_option_jump_table:
 	dl {rom_config_exit} - 1
 {loadpc}
 
-{savepc}
-	// Bad attribute hacks to stop drawing the option borders.
-	// Trying to actually delete the strings screws up nearby rendering.
-
-	// Key Config, inactive
-	{reorg $869039}
-	db $01
-	{reorg $869051}
-	db $01
-	{reorg $86905C}
-	db $01
-	{reorg $869061}
-	db $01
-	{reorg $869066}
-	db $01
-	{reorg $86906B}
-	db $01
-	{reorg $869070}
-	db $01
-	{reorg $869075}
-	db $01
-	{reorg $86907A}
-	db $01
-	{reorg $86907F}
-	db $01
-	{reorg $869084}
-	db $01
-	{reorg $869089}
-	db $01
-	{reorg $86908E}
-	db $01
-	{reorg $869093}
-	db $01
-	{reorg $869098}
-	db $01
-	{reorg $86909D}
-	db $01
-	{reorg $8690A2}
-	db $01
-	{reorg $8690A7}
-	db $01
-	{reorg $8690AD}
-	db $01
-	{reorg $8690C6}
-	db $01
-
-	// Key Config, active
-	{reorg $8690CC}
-	db $01
-	{reorg $8690E4}
-	db $01
-	{reorg $8690EF}
-	db $01
-	{reorg $8690F4}
-	db $01
-	{reorg $8690F9}
-	db $01
-	{reorg $8690FE}
-	db $01
-	{reorg $869103}
-	db $01
-	{reorg $869108}
-	db $01
-	{reorg $86910D}
-	db $01
-	{reorg $869112}
-	db $01
-	{reorg $869117}
-	db $01
-	{reorg $86911C}
-	db $01
-	{reorg $869121}
-	db $01
-	{reorg $869126}
-	db $01
-	{reorg $86912B}
-	db $01
-	{reorg $869130}
-	db $01
-	{reorg $869135}
-	db $01
-	{reorg $86913A}
-	db $01
-	{reorg $869140}
-	db $01
-	{reorg $869159}
-	db $01
-
-	//Sound Mode, inactive
-	{reorg $86915F}
-	db $01
-	{reorg $869177}
-	db $01
-	{reorg $869182}
-	db $01
-	{reorg $869187}
-	db $01
-	{reorg $86918C}
-	db $01
-	{reorg $869191}
-	db $01
-	{reorg $869196}
-	db $01
-	{reorg $86919B}
-	db $01
-	{reorg $8691A1}
-	db $01
-	{reorg $8691BA}
-	db $01
-
-	//Sound Mode, active
-	{reorg $8691C0}
-	db $01
-	{reorg $8691D8}
-	db $01
-	{reorg $8691E3}
-	db $01
-	{reorg $8691E8}
-	db $01
-	{reorg $8691ED}
-	db $01
-	{reorg $8691F2}
-	db $01
-	{reorg $8691F7}
-	db $01
-	{reorg $8691FC}
-	db $01
-	{reorg $869202}
-	db $01
-	{reorg $86921B}
-	db $01
-
-	// Move Sound Mode, Stereo/Mono and Exit up
-	// Sound Mode
-	{reorg $86916A}
-	dw $1417 >> 1
-	{reorg $8691CB}
-	dw $1417 >> 1
-
-	// Stereo/Mono
-	{reorg $8692B0}
-	dw $1498 >> 1
-	{reorg $8692BD}
-	dw $1498 >> 1
-	{reorg $8692CA}
-	dw $1498 >> 1
-	{reorg $8692D7}
-	dw $1498 >> 1
-
-	// Exit
-	{reorg $86929E}
-	dw $165C >>1
-	{reorg $8692A7}
-	dw $165C >>1
-
-	// Only draw the option headers in their activated state
-	{reorg $869043}
-	db $34
-	{reorg $869169}
-	db $34
-{loadpc}
-
 // Macros for creating new option strings.
 macro option_string label, string, vramaddr, attribute, terminator
 	{label}:
@@ -973,6 +811,53 @@ macro option_string_pair label, string, vramaddr
 	{option_string {label}_normal, {string}, {vramaddr}, $20, 1}
 	{option_string {label}_highlighted, {string}, {vramaddr}, $28, 1}
 endmacro
+
+{savepc}
+	// Option Mode hacks
+
+	// Do not draw borders, only draw highlighted menu headers, move SOUND MODE up
+	{reorg $869038}
+	{option_string .key_config_normal, "KEY CONFIG", $11D6, $34, 1}
+	{reorg $86905B}
+	db $00 // Terminating the string sections immediately with these
+	{reorg $8690AC}
+	db $00
+	{reorg $8690CB}
+	{option_string .key_config_highlighted, "KEY CONFIG", $11D6, $34, 1}
+	{reorg $8690EE}
+	db $00
+	{reorg $86913F}
+	db $00
+	{reorg $86915E}
+	{option_string .sound_mode_normal, "SOUND MODE", $1417, $34, 1}
+	{reorg $869181}
+	db $00
+	{reorg $8691A0}
+	db $00
+	{reorg $8691BF}
+	{option_string .sound_mode_highlighted, "SOUND MODE", $1417, $34, 1}
+	{reorg $8691E2}
+	db $00
+	{reorg $869201}
+	db $00
+
+	//Move STEREO/MONAURAL and EXIT up
+	// Stereo/Mono
+	{reorg $8692B0}
+	dw $1498 >> 1
+	{reorg $8692BD}
+	dw $1498 >> 1
+	{reorg $8692CA}
+	dw $1498 >> 1
+	{reorg $8692D7}
+	dw $1498 >> 1
+
+	// Exit
+	{reorg $86929E}
+	dw $165C >>1
+	{reorg $8692A7}
+	dw $165C >>1
+{loadpc}
 
 
 {savepc}
