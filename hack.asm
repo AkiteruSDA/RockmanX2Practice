@@ -52,6 +52,7 @@ eval rom_config_stereo $80EC00
 eval rom_config_exit $80EC48
 // SRAM addresses for saved states
 eval sram_start $700000
+eval sram_previous_command $700200
 eval sram_wram_7E0000 $710000
 eval sram_wram_7E8000 $720000
 eval sram_wram_7F0000 $730000
@@ -1224,10 +1225,24 @@ nmi_patch:
 	db $08
 {loadpc}
 
+{savepc}
+	{reorg $00800E}
+	jml init_hook
+{loadpc}
 
 {savepc}
 	// Saved state hacks
 	{reorg $03FA00}
+
+init_hook:
+	// Deleted code.
+	sta.l $7EFFFF
+	// What we need to do at startup.
+	sta.l {sram_previous_command}
+	sta.l {sram_previous_command}+1
+	// Return to original code.
+	jml $008012
+
 nmi_hook:
 
 	// Rather typical NMI prolog code - same as real one.
@@ -1250,17 +1265,23 @@ nmi_hook:
 	bit.b {controller_2_new}
 	beq .return_normal
 
+	// We need to suppress repeating ourselves when L or R is held down.
+	cmp.l {sram_previous_command}
+	beq .return_normal_no_rep
+	sta.l {sram_previous_command}
+
 	// Check for Select + R.
 	and.w #$2030
 	cmp.w #$2010
 	beq .select_r
 	cmp.w #$2020
-	bne .return_normal
+	bne .return_normal_no_rep
 	jmp .select_l
 
 // Resume NMI handler, skipping the register pushes.
 .return_normal:
 	rep #$38
+.return_normal_no_rep:
 	jml {rom_nmi_after_pushes}
 
 // Play an error sound effect.
