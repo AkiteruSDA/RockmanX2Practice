@@ -829,13 +829,15 @@ endmacro
 	{reorg $86913F}
 	db $00
 	{reorg $86915E}
-	{option_string .sound_mode_normal, "SOUND MODE", $1417, $34, 1}
+	{option_string .sound_mode_normal, "SOUND MODE", $1417, $34, 0}
+	{option_string .misc_normal, "MISC", $151C, $34, 1}
 	{reorg $869181}
 	db $00
 	{reorg $8691A0}
 	db $00
 	{reorg $8691BF}
-	{option_string .sound_mode_highlighted, "SOUND MODE", $1417, $34, 1}
+	{option_string .sound_mode_highlighted, "SOUND MODE", $1417, $34, 0}
+	{option_string .misc_highlighted, "MISC", $151C, $34, 1}
 	{reorg $8691E2}
 	db $00
 	{reorg $869201}
