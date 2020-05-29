@@ -1214,7 +1214,7 @@ nmi_patch:
 	// If controller is enabled, copy 2's state to 1's state.
 	lda.w {controller_1_disable}
 	and.w #$00FF
-	bne .resume_nmi
+	bne .controller_disabled
 	lda.b {controller_2_current}
 	sta.b {controller_1_current}
 	lda.b {controller_2_previous}
