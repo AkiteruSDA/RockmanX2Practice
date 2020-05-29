@@ -44,8 +44,10 @@ eval current_level $7E1FAD
 eval xhunter_level $7E1FAE
 eval life_count $7E1FB3
 eval spc_state_shadow $7EFFFE
+eval ram_nmi_after_controller $7E25DB //Code copied from ROM
 // ROM addresses
 eval rom_play_sound $008549
+eval rom_nmi_after_controller $0885DB
 eval rom_nmi_after_pushes $7E200B  // Rockman X2 has its NMI handler in RAM
 eval rom_config_button $80EB6D
 eval rom_config_stereo $80EC00
@@ -63,8 +65,10 @@ eval sram_cgram $772000
 eval sram_dma_bank $770000
 eval sram_validity $774000
 eval sram_saved_sp $774004
+eval sram_saved_dp $774006
 eval sram_vm_return $774006
 eval sram_size $080000
+eval sram_banks $08
 // Mode IDs (specific to this hack)
 eval mode_id_anypercent 0  // Any%, which just means Zero isn't saved.
 // Route IDs
@@ -95,6 +99,16 @@ eval unknown_level_flag_value_xhunter $FF
 eval magic_sram_tag_lo $454D  // Combined, these say "MEOW"
 eval magic_sram_tag_hi $574F
 
+{savepc}
+	// Change SRAM size to 256 KB
+	{reorg $00FFD8}
+	db $08
+{loadpc}
+
+{savepc}
+	{reorg $00800E}
+	jml init_hook
+{loadpc}
 
 {savepc}
 	{reorg $00C622}
@@ -1207,28 +1221,18 @@ nmi_patch:
 	sta.b {controller_1_previous}
 	lda.b {controller_2_new}
 	sta.b {controller_1_new}
+.controller_disabled:
+	// Check for Select being held.  Jump to nmi_hook if so.
+	lda.b {controller_2_current}
+	bit.w #$2000
+	beq .resume_nmi
+	jml nmi_hook
 .resume_nmi:
 	rts
+	// I don't think this version of bass has warnpc, but there's apparently only 3 bytes left here (from X3 hack)
+	//{warnpc {rom_nmi_after_controller}}
 {loadpc}
 
-{savepc}
-	// Hook NMI
-	{reorg $00FFEA}
-	dw $FFA0
-	{reorg $00FFFA}
-	dw $FFA0
-	{reorg $00FFA0}
-	jml nmi_hook
-
-	// Change SRAM size to 256 KB
-	{reorg $00FFD8}
-	db $08
-{loadpc}
-
-{savepc}
-	{reorg $00800E}
-	jml init_hook
-{loadpc}
 
 {savepc}
 	// Saved state hacks
@@ -1243,38 +1247,44 @@ init_hook:
 	// Return to original code.
 	jml $008012
 
+// Called during NMI if select is being held.
 nmi_hook:
+	// Check for L or R newly being pressed.
+	lda.b {controller_2_new}
+	and.w #$0030
 
-	// Rather typical NMI prolog code - same as real one.
-	rep #$38
-	pha
-	phx
-	phy
-	phd
-	phb
-	lda.w #$0000
-	tcd
+	// We now can execute slow code, because we know that the player is giving
+	// us a command to do.
 
-	// Don't interfere with NMI as much as possible.
-	// Only execute when select is pressed.
+	// This is a command to us, so we want to hide the button press from the game.
+	tax
+	lda.w #$FFCF
+	and.b {controller_2_current}
+	sta.b {controller_2_current}
+	lda.w #$FFCF
+	and.b {controller_2_new}
+	sta.b {controller_2_new}
+
+	// If controller data is enabled, copy these new fields, too.
+	lda.w {controller_1_disable}
+	and.w #$00FF
+	bne .controller_disabled
 	lda.b {controller_2_current}
-	bit.w #$2000
-	beq .return_normal
-
-	// Mask controller.
-	bit.b {controller_2_new}
-	beq .return_normal
+	sta.b {controller_1_current}
+	lda.b {controller_2_new}
+	sta.b {controller_1_new}
+.controller_disabled:
+	txa
 
 	// We need to suppress repeating ourselves when L or R is held down.
 	cmp.l {sram_previous_command}
 	beq .return_normal_no_rep
 	sta.l {sram_previous_command}
 
-	// Check for Select + R.
-	and.w #$2030
-	cmp.w #$2010
+	// Distinguish between the cases.
+	cmp.w #$0010
 	beq .select_r
-	cmp.w #$2020
+	cmp.w #$0020
 	bne .return_normal_no_rep
 	jmp .select_l
 
@@ -1282,7 +1292,7 @@ nmi_hook:
 .return_normal:
 	rep #$38
 .return_normal_no_rep:
-	jml {rom_nmi_after_pushes}
+	jml {ram_nmi_after_controller}
 
 // Play an error sound effect.
 .error_sound_return:
@@ -1295,7 +1305,6 @@ nmi_hook:
 	lda.b #$5A
 	jsl {rom_play_sound}
 	bra .return_normal
-
 
 // Select and R pushed = save.
 .select_r:
@@ -1325,7 +1334,7 @@ nmi_hook:
 	sta.w $0000
 	inc
 	iny
-	cpy.b #({sram_start} + {sram_size}) >> 16
+	cpy.b #(({sram_start} >> 16) + {sram_banks})
 	bne .sram_test_write_loop
 
 	// Read the data back and verify it.
@@ -1338,11 +1347,17 @@ nmi_hook:
 	bne .error_sound_return
 	inc
 	iny
-	cpy.b #({sram_start} + {sram_size}) >> 16
+	cpy.b #(({sram_start} >> 16) + {sram_banks})
 	bne .sram_test_read_loop
 
-	// Store DMA registers' values to SRAM.
+
+	// Mark the save as invalid in case we lose power or crash while saving.
 	rep #$30
+	lda.w #0
+	sta.l {sram_validity}
+	sta.l {sram_validity} + 2
+
+	// Store DMA registers' values to SRAM.
 	ldy.w #0
 	phy
 	plb
@@ -1442,6 +1457,13 @@ nmi_hook:
 	dw $0000 | $4314, $0077  // A addr = $77xxxx, size = $xx00
 	dw $0000 | $4316, $0002  // size = $02xx ($0200), unused bank reg = $00.
 	dw $1000 | $420B, $02    // Trigger DMA on channel 1
+	// Copy OAM 000-23F to SRAM 772200-77243F.
+	dw $0000 | $2102, $0000  // OAM address
+	dw $0000 | $4310, $3880  // direction = B->A, byte reg, B addr = $2138
+	dw $0000 | $4312, $2200  // A addr = $xx2200
+	dw $0000 | $4314, $4077  // A addr = $77xxxx, size = $xx40
+	dw $0000 | $4316, $0002  // size = $02xx ($0240), unused bank reg = $00.
+	dw $1000 | $420B, $02    // Trigger DMA on channel 1
 	// Done
 	dw $0000, .save_return
 
@@ -1451,16 +1473,19 @@ nmi_hook:
 	plb
 	plb
 
-	// Mark the save as valid.
+	// Save stack pointer.
 	rep #$30
+	tsa
+	sta.l {sram_saved_sp}
+	// Save direct pointer.
+	tda
+	sta.l {sram_saved_dp}
+
+	// Mark the save as valid.
 	lda.w #{magic_sram_tag_lo}
 	sta.l {sram_validity}
 	lda.w #{magic_sram_tag_hi}
 	sta.l {sram_validity} + 2
-
-	// Save stack pointer.
-	tsa
-	sta.l {sram_saved_sp}
 
 .register_restore_return:
 	// Restore register state for return.
@@ -1472,21 +1497,13 @@ nmi_hook:
 	lda.b {screen_control_shadow}
 	sta.w $2100
 
-	// Copy SPC state to SPC state shadow, or the game gets confused.
+	// Copy actual SPC state to shadow SPC state, or the game gets confused.
 	lda.w $2142
 	sta.l {spc_state_shadow}
 
-	// Wait for V-blank to end then start again.
-//.nmi_wait_loop_set:
-//	lda.w $4212
-//	bmi .nmi_wait_loop_set
-//.nmi_wait_loop_clear:
-//	lda.w $4212
-//	bpl .nmi_wait_loop_clear
-
+	// Return to the game's NMI handler.
 	rep #$38
-	jml {rom_nmi_after_pushes}   // Jump to normal NMI handler, skipping the
-	                             // prolog code, since we already did it.
+	jml {ram_nmi_after_controller}
 
 // Select and L pushed = load.
 .select_l:
@@ -1592,6 +1609,13 @@ nmi_hook:
 	dw $0000 | $4314, $0077  // A addr = $77xxxx, size = $xx00
 	dw $0000 | $4316, $0002  // size = $02xx ($0200), unused bank reg = $00.
 	dw $1000 | $420B, $02    // Trigger DMA on channel 1
+	// Copy SRAM 772200-77243F to OAM 000-23F.
+	dw $0000 | $2102, $0000  // OAM address
+	dw $0000 | $4310, $0400  // direction = A->B, byte reg, B addr = $2104
+	dw $0000 | $4312, $2200  // A addr = $xx2200
+	dw $0000 | $4314, $4077  // A addr = $77xxxx, size = $xx40
+	dw $0000 | $4316, $0002  // size = $02xx ($0240), unused bank reg = $00.
+	dw $1000 | $420B, $02    // Trigger DMA on channel 1
 	// Done
 	dw $0000, .load_return
 
@@ -1601,21 +1625,16 @@ nmi_hook:
 	rep #$30
 	lda.l {sram_saved_sp}
 	tas
+	// Load direct pointer.
+	lda.l {sram_saved_dp}
+	tad
 
 	// Restore null bank now that we have a working stack.
 	pea $0000
 	plb
 	plb
 
-	// Rewrite inputs in ram to reflect the loading inputs and not saving inputs
-	lda.b {controller_1_current}
-	eor.w #$2010
-	ora.w #$2020
-	sta.b {controller_1_previous}
-	sta.b {controller_1_current}
-	sta.b {controller_1_new}
-
-	// Load DMA from SRAM
+	// Load DMA registers' state from SRAM.
 	ldy.w #0
 	ldx.w #0
 
@@ -1641,7 +1660,6 @@ nmi_hook:
 .load_dma_regs_done:
 	// Restore registers and return.
 	jmp .register_restore_return
-
 
 .vm:
 	// Data format: xx xx yy yy
