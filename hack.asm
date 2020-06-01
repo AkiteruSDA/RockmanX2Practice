@@ -651,6 +651,23 @@ route_metatable:
 
 {loadpc}
 
+// Macros for creating new strings.
+macro option_string label, string, vramaddr, attribute, terminator
+	{label}:
+		db {label}_end - {label}_begin, {attribute}
+		dw {vramaddr} >> 1
+	{label}_begin:
+		db {string}
+	{label}_end:
+	if {terminator}
+		db 0
+	endif
+endmacro
+
+macro option_string_pair label, string, vramaddr
+	{option_string {label}_normal, {string}, {vramaddr}, $20, 1}
+	{option_string {label}_highlighted, {string}, {vramaddr}, $28, 1}
+endmacro
 
 {savepc}
 	// 640 bytes available in bank 6, an extremely-critical bank.
@@ -667,31 +684,10 @@ initial_menu_strings:
 	endmacro
 
 	macro optionset label, attrib1, attrib2, attrib3, attrib4
-		db .option1_{label}_end - .option1_{label}_begin, {attrib1}
-		dw $1492 >> 1
-	.option1_{label}_begin:
-		db "ANY`"
-	.option1_{label}_end:
-
-		db .option2_{label}_end - .option2_{label}_begin, {attrib2}
-		dw $1512 >> 1
-	.option2_{label}_begin:
-		db "100`"
-	.option2_{label}_end:
-
-		db .option3_{label}_end - .option3_{label}_begin, {attrib3}
-		dw $1592 >> 1
-	.option3_{label}_begin:
-		db "LOW`"
-	.option3_{label}_end:
-
-		db .option4_{label}_end - .option4_{label}_begin, {attrib4}
-		dw $1612 >> 1
-	.option4_{label}_begin:
-		db "OPTIONS"
-	.option4_{label}_end:
-
-		db 0
+		{option_string .option1_{label}, "ANY`", $1492, {attrib1}, 0}
+		{option_string .option2_{label}, "100`", $1512, {attrib2}, 0}
+		{option_string .option3_{label}, "LOW`", $1592, {attrib3}, 0}
+		{option_string .option4_{label}, "OPTIONS", $1612, {attrib4}, 1}
 	endmacro
 
 	{tilerow $0600, 0,   0,2,3,0,0,0,2,3}
@@ -706,17 +702,12 @@ initial_menu_strings:
 	// Menu text.  I've added an extra option versus the original and moved it
 	// one tile to the left for better centering.  I also added the edition
 	// text to the top.
-	db .edition_end - .edition_begin, $28
-	dw $138E >> 1
-.edition_begin:
-	db "- Practice Edition -"
-.edition_end:
+	{option_string .edition, "- Practice Edition -", $138E, $28, 0}
 
 // Option set 1 can be overlapped with the tail of initial_menu_strings.
 option_set_1:
 	{optionset s1, $24, $20, $20, $20}
 	db 0
-
 option_set_2:
 	{optionset s2, $20, $24, $20, $20}
 	db 0
@@ -729,20 +720,13 @@ option_set_4:
 
 // Replacement copyright string.  @ in the X2 font is the copyright symbol.
 copyright_string:
-	db .rockman_x2_end - .rockman_x2_start, $20
-	dw $1256 >> 1
-.rockman_x2_start:
-	db "ROCKMAN X2"
-.rockman_x2_end:
+	{option_string .rockman_x2, "ROCKMAN X2", $1256, $20, 0}
 	// The original drew a space then went back and drew a copyright symbol
 	// over the space.  I don't see a need to do that - I'll draw a copyright
 	// symbol in the first place.
-	db .capcom_end - .capcom_start, $20
-	dw $128C >> 1
-.capcom_start:
-	db "@ CAPCOM CO.,LTD.1994"
-.capcom_end:
+	{option_string .capcom, "@ CAPCOM CO.,LTD.1994", $128C, $20, 0}
 	// My custom message.  The opening quotation mark is flipped.
+	// Don't use the macro for this text due to technical limitations.
 	db 1, $60
 	dw $138E >> 1
 	db '"'
@@ -751,11 +735,8 @@ copyright_string:
 .practice_start:
 	db "PRACTICE EDITION",'"'
 .practice_end:
-	db .credit_end - .credit_start, $20
-	dw $1453 >> 1
-.credit_start:
-	db "BY MYRIA, TOTAL,                  AND AKITERU"
-.credit_end:
+	{option_string .credit, "BY MYRIA, TOTAL,                  AND AKITERU", $1453, $20, 0}
+	// Don't use the macro for this text due to technical limitations.
 	db .version_end - .version_start, $20
 	dw $14CF >> 1
 .version_start:
@@ -764,7 +745,6 @@ copyright_string:
 .version_end:
 	// Terminates sequence of VRAM strings.
 	db 0
-
 {loadpc}
 
 
@@ -811,23 +791,6 @@ config_option_jump_table:
 	dl {rom_config_exit} - 1
 {loadpc}
 
-// Macros for creating new option strings.
-macro option_string label, string, vramaddr, attribute, terminator
-	{label}:
-		db {label}_end - {label}_begin, {attribute}
-		dw {vramaddr} >> 1
-	{label}_begin:
-		db {string}
-	{label}_end:
-	if {terminator}
-		db 0
-	endif
-endmacro
-
-macro option_string_pair label, string, vramaddr
-	{option_string {label}_normal, {string}, {vramaddr}, $20, 1}
-	{option_string {label}_highlighted, {string}, {vramaddr}, $28, 1}
-endmacro
 
 {savepc}
 	// Option Mode hacks
