@@ -49,9 +49,16 @@ eval ram_nmi_after_controller $7E25DB //Code copied from ROM
 eval rom_play_sound $008549
 eval rom_nmi_after_controller $0885DB
 eval rom_nmi_after_pushes $7E200B  // Rockman X2 has its NMI handler in RAM
+eval rom_rtl_instruction $808464  // last instruction of rom_play_sound
 eval rom_config_button $80EB6D
 eval rom_config_stereo $80EC00
 eval rom_config_exit $80EC48
+eval rom_string_table $868C6F
+eval rom_string_table_unused $868D19
+eval rom_string_table_end $868D59 // // one past the end of rom_string_table
+eval rom_bank84_string_table $84FF00  // where to put the master string table (free space in ROM)
+// Constants derived from ROM addresses
+eval num_used_string_table ({rom_string_table_unused} - {rom_string_table}) / 2
 // SRAM addresses for saved states
 eval sram_start $700000
 eval sram_previous_command $700200
@@ -669,9 +676,8 @@ macro option_string_pair label, string, vramaddr
 	{option_string {label}_highlighted, {string}, {vramaddr}, $28, 1}
 endmacro
 
-{savepc}
-	// 640 bytes available in bank 6, an extremely-critical bank.
-	{reorg $06FD80}
+//640 bytes available
+{reorg $86FD80}
 
 initial_menu_strings:
 	// I'm too lazy to rework the compressed font, so I use this to overwrite
@@ -745,8 +751,11 @@ copyright_string:
 .version_end:
 	// Terminates sequence of VRAM strings.
 	db 0
-{loadpc}
 
+// Extra strings added to the table.
+{option_string_pair string_keeprng, "KEEP RNG", $1464}
+{option_string string_keeprng_on, "ON ", $1476, $20, 1}
+{option_string string_keeprng_off, "OFF", $1476, $20, 1}
 
 {savepc}
 	// Overwrite the copyright string pointer.
@@ -758,9 +767,104 @@ copyright_string:
 	dw initial_menu_strings
 	dw initial_menu_strings
 	dw initial_menu_strings
-
 {loadpc}
 
+// New additions to string table.  This table has reserved entries not being used.
+{savepc}
+	{reorg {rom_bank84_string_table}}
+string_table:
+	macro stringtableentry label
+		.idcalc_{label}:
+			dw (string_{label}) & $FFFF
+		eval stringid_{label} ((string_table.idcalc_{label} - string_table) / 2) + {num_used_string_table}
+	endmacro
+
+	{stringtableentry keeprng_normal}
+	{stringtableentry keeprng_highlighted}
+	{stringtableentry keeprng_off}
+	{stringtableentry keeprng_on}
+{loadpc}
+
+// Hack initial config menu routine to add more strings.
+{savepc}
+	{reorg $80EA70}
+	jml config_menu_start_hook
+{loadpc}
+config_menu_start_hook:
+	// We enter with A/X/Y 8-bit and bank set to $86 (our code bank)
+	// Deleted code.  We need to do this first, or 815F fails.
+	lda.b #7
+	tsb.w $7E00A3
+
+	ldx.b #0
+.string_loop:
+	lda.w config_menu_extra_string_table, x
+	phx
+	beq .string_flush
+	cmp.b #$FF
+	beq .special
+	jsl trampoline_808669
+	bra .string_next
+.special:
+	// Call a function
+	inx
+	clc   // having carry clear is convenient for these functions
+	jsr (config_menu_extra_string_table, x)
+	jsl trampoline_808669
+	plx
+	inx
+	inx
+	bra .special_resume
+.string_flush:
+	jsl trampoline_80815F
+.string_next:
+	plx
+.special_resume:  // save 1 byte by using the extra inx here
+	inx
+	cpx.b #config_menu_extra_string_table.end - config_menu_extra_string_table
+	bne .string_loop
+
+	jml $80EA75
+
+// Table of static strings to render at config screen load time.
+config_menu_extra_string_table:
+	// Extra call to 815F to execute and flush the draw buffer before our first
+	// string, otherwise we end up drawing too much.
+	db $00
+	// Selectable option labels.
+	db {stringid_keeprng_normal}
+	//db $00  // flush
+	// Extra option values.
+	//dw config_get_stringid_keeprng
+	//db $FF
+	//db $00  // flush
+	//db $27  // EXIT
+	// We return to a flush call.
+.end:
+
+// Trampoline for calling $80815F  (flush string draw buffer?)
+trampoline_80815F:
+	pea ({rom_rtl_instruction} - 1) & 0xFFFF
+	jml $80815F
+// Trampoline for calling $808669  (draw string)
+trampoline_808669:
+	pea ({rom_rtl_instruction} - 1) & 0xFFFF
+	jml $808669
+
+
+// 297 bytes available here. Mirrors $007E77 in the ROM.
+{reorg $80FE77}
+
+config_option_jump_table:
+	// These are minus one due to using RTL to jump to them.
+	dl {rom_config_button} - 1
+	dl {rom_config_button} - 1
+	dl {rom_config_button} - 1
+	dl {rom_config_button} - 1
+	dl {rom_config_button} - 1
+	dl {rom_config_button} - 1
+	dl {rom_config_stereo} - 1
+	dl {rom_config_exit} - 1
 
 {savepc}
 	// Use config_option_jump_table instead of the built-in one.
@@ -776,20 +880,40 @@ copyright_string:
 	pha
 	sep #$20
 	rtl
-
-	// 297 bytes available here. Mirrors $007E77 in the ROM.
-	{reorg $80FE77}
-config_option_jump_table:
-	// These are minus one due to using RTL to jump to them.
-	dl {rom_config_button} - 1
-	dl {rom_config_button} - 1
-	dl {rom_config_button} - 1
-	dl {rom_config_button} - 1
-	dl {rom_config_button} - 1
-	dl {rom_config_button} - 1
-	dl {rom_config_stereo} - 1
-	dl {rom_config_exit} - 1
 {loadpc}
+
+// Hack draw_string to use our custom table.
+{savepc}
+	{reorg $808669}
+	jmp draw_string_hack
+{loadpc}
+draw_string_hack:
+	// This assumes that we stay in bank 80.
+	// Overwritten code
+	sep #$30
+	sta.b $02
+	and.b #$7F    // might change this if we need more than 127 strings
+	asl
+	tay
+	// Is this one of our extra strings?
+	cpy.b #{num_used_string_table} * 2
+	bcc .old_table
+	// Switch to the other bank.
+	phb
+	pea ({rom_bank84_string_table} >> 16) * $0101
+	plb
+	plb
+	// Refer to the new table instead.
+	lda {rom_bank84_string_table} - ({num_used_string_table} * 2), y
+	sta.b $10
+	lda {rom_bank84_string_table} - ({num_used_string_table} * 2) + 1, y
+	sta.b $11
+	// Return to original code.
+	plb
+	jmp $80867B
+.old_table:
+	// Use the original code.
+	jmp $808671 + 0 // The "+ 0" was necessary to compile for some reason. bass bug?
 
 
 {savepc}
