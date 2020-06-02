@@ -76,6 +76,20 @@ eval sram_saved_dp $774006
 eval sram_vm_return $774006
 eval sram_size $080000
 eval sram_banks $08
+// SRAM addresses for general config.  These are at lower addresses to support
+// emulators and cartridges that don't support 256 KB of SRAM.
+eval sram_config_valid $700100
+eval sram_config_game $700104   // Main game config.  game_config_size bytes.
+eval sram_config_extra {sram_config_game} + {game_config_size}
+//eval sram_config_category {sram_config_extra} + 0
+//eval sram_config_route {sram_config_extra} + 1
+//eval sram_config_midpointsoff {sram_config_extra} + 2
+eval sram_config_keeprng {sram_config_extra} + 0
+//eval sram_config_musicoff {sram_config_extra} + 4
+//eval sram_config_godmode {sram_config_extra} + 5
+//eval sram_config_fixdrop {sram_config_extra} + 6
+//eval sram_config_delay {sram_config_extra} + 7
+eval sram_config_extra_size 1   // adjust and renumber config options as more are added
 // Mode IDs (specific to this hack)
 eval mode_id_anypercent 0  // Any%, which just means Zero isn't saved.
 // Route IDs
@@ -753,9 +767,9 @@ copyright_string:
 	db 0
 
 // Extra strings added to the table.
-{option_string_pair string_keeprng, "KEEP RNG", $1464}
-{option_string string_keeprng_on, "ON ", $1476, $20, 1}
-{option_string string_keeprng_off, "OFF", $1476, $20, 1}
+{option_string_pair string_keeprng, "KEEP RNG", $158E}
+{option_string string_keeprng_on, "ON ", $15A8, $34, 1}
+{option_string string_keeprng_off, "OFF", $15A8, $34, 1}
 
 {savepc}
 	// Overwrite the copyright string pointer.
@@ -835,12 +849,18 @@ config_menu_extra_string_table:
 	db {stringid_keeprng_normal}
 	//db $00  // flush
 	// Extra option values.
-	//dw config_get_stringid_keeprng
-	//db $FF
-	//db $00  // flush
-	//db $27  // EXIT
+	db $FF
+	dw config_get_stringid_keeprng
+	db $00  // flush
+	db $27  // EXIT
 	// We return to a flush call.
 .end:
+
+config_get_stringid_keeprng:
+	lda.l {sram_config_keeprng}
+	and.b #$01
+	adc.b #{stringid_keeprng_off}
+	rts
 
 // Trampoline for calling $80815F  (flush string draw buffer?)
 trampoline_80815F:
