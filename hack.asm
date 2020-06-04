@@ -837,7 +837,6 @@ config_menu_start_hook:
 	inx
 	cpx.b #config_menu_extra_string_table.end - config_menu_extra_string_table
 	bne .string_loop
-
 	jml $80EA75
 
 // Table of static strings to render at config screen load time.
@@ -871,10 +870,6 @@ trampoline_808669:
 	pea ({rom_rtl_instruction} - 1) & 0xFFFF
 	jml $808669
 
-
-// 297 bytes available here. Mirrors $007E77 in the ROM.
-{reorg $80FE77}
-
 config_option_jump_table:
 	// These are minus one due to using RTL to jump to them.
 	dl {rom_config_button} - 1
@@ -884,7 +879,79 @@ config_option_jump_table:
 	dl {rom_config_button} - 1
 	dl {rom_config_button} - 1
 	dl {rom_config_stereo} - 1
+	//dl config_code_keeprng - 1
 	dl {rom_config_exit} - 1
+
+{savepc}
+	// Use our alternate table.
+	//DP = 06 here, which is why config_unhighlighted_string_ids is in bank 86 (mirror)
+	{reorg $80EB18}
+	lda.w config_unhighlighted_string_ids,x
+	{reorg $80EB35}
+	lda.w config_unhighlighted_string_ids,x
+{loadpc}
+config_unhighlighted_string_ids:
+	db $23 // SHOT
+	db $25 // JUMP
+	db $27 // DASH
+	db $29 // SELECT_L
+	db $2B // SELECT_R
+	db $2D // MENU
+	db $2F // STEREO/MONO
+	//db {stringid_keeprng_normal}
+	db $2F // EXIT?? Not sure why this isn't different to stereo/mono.
+
+{savepc}
+	// Option Mode position hacks
+
+	// Do not draw borders, only draw highlighted menu headers, move SOUND MODE up
+	{reorg $869038}
+	{option_string .key_config_normal, "KEY CONFIG", $11D6, $34, 1}
+	{reorg $86905B}
+	db $00 // Terminating the string sections immediately with these
+	{reorg $8690AC}
+	db $00
+	{reorg $8690CB}
+	{option_string .key_config_highlighted, "KEY CONFIG", $11D6, $34, 1}
+	{reorg $8690EE}
+	db $00
+	{reorg $86913F}
+	db $00
+	{reorg $86915E}
+	{option_string .sound_mode_normal, "SOUND MODE", $1417, $34, 0}
+	{option_string .misc_normal, "MISC", $151C, $34, 1}
+	{reorg $869181}
+	db $00
+	{reorg $8691A0}
+	db $00
+	{reorg $8691BF}
+	{option_string .sound_mode_highlighted, "SOUND MODE", $1417, $34, 0}
+	{option_string .misc_highlighted, "MISC", $151C, $34, 1}
+	{reorg $8691E2}
+	db $00
+	{reorg $869201}
+	db $00
+
+	//Move STEREO/MONAURAL and EXIT up
+	// Stereo/Mono
+	{reorg $8692B0}
+	dw $1498 >> 1
+	{reorg $8692BD}
+	dw $1498 >> 1
+	{reorg $8692CA}
+	dw $1498 >> 1
+	{reorg $8692D7}
+	dw $1498 >> 1
+
+	// Exit
+	{reorg $86929E}
+	dw $165C >>1
+	{reorg $8692A7}
+	dw $165C >>1
+{loadpc}
+
+// 297 bytes available here. Mirrors $007E77 in the ROM.
+{reorg $80FE77}
 
 {savepc}
 	// Use config_option_jump_table instead of the built-in one.
@@ -934,56 +1001,6 @@ draw_string_hack:
 .old_table:
 	// Use the original code.
 	jmp $808671 + 0 // The "+ 0" was necessary to compile for some reason. bass bug?
-
-
-{savepc}
-	// Option Mode hacks
-
-	// Do not draw borders, only draw highlighted menu headers, move SOUND MODE up
-	{reorg $869038}
-	{option_string .key_config_normal, "KEY CONFIG", $11D6, $34, 1}
-	{reorg $86905B}
-	db $00 // Terminating the string sections immediately with these
-	{reorg $8690AC}
-	db $00
-	{reorg $8690CB}
-	{option_string .key_config_highlighted, "KEY CONFIG", $11D6, $34, 1}
-	{reorg $8690EE}
-	db $00
-	{reorg $86913F}
-	db $00
-	{reorg $86915E}
-	{option_string .sound_mode_normal, "SOUND MODE", $1417, $34, 0}
-	{option_string .misc_normal, "MISC", $151C, $34, 1}
-	{reorg $869181}
-	db $00
-	{reorg $8691A0}
-	db $00
-	{reorg $8691BF}
-	{option_string .sound_mode_highlighted, "SOUND MODE", $1417, $34, 0}
-	{option_string .misc_highlighted, "MISC", $151C, $34, 1}
-	{reorg $8691E2}
-	db $00
-	{reorg $869201}
-	db $00
-
-	//Move STEREO/MONAURAL and EXIT up
-	// Stereo/Mono
-	{reorg $8692B0}
-	dw $1498 >> 1
-	{reorg $8692BD}
-	dw $1498 >> 1
-	{reorg $8692CA}
-	dw $1498 >> 1
-	{reorg $8692D7}
-	dw $1498 >> 1
-
-	// Exit
-	{reorg $86929E}
-	dw $165C >>1
-	{reorg $8692A7}
-	dw $165C >>1
-{loadpc}
 
 
 {savepc}
