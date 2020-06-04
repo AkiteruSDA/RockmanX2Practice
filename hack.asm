@@ -1709,6 +1709,11 @@ nmi_hook:
 	jmp .run_vm
 
 .load_after_7E_done:
+	// We enter with 16-bit A/X/Y.
+	// Restore the RNG value with what we saved before.
+	lda.l {sram_config_keeprng}
+	and.w #$00FF
+	bne .jmp_run_vm
 	lda.l {load_temporary_rng}
 	sta.l {rng_value}
 	bra .jmp_run_vm
