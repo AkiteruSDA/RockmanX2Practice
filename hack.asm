@@ -691,8 +691,8 @@ macro option_string_pair label, string, vramaddr
 	{option_string {label}_highlighted, {string}, {vramaddr}, $28, 1}
 endmacro
 
-//640 bytes available
-{reorg $86FD80}
+// 708 bytes available
+{reorg $86FD3B}
 
 initial_menu_strings:
 	// I'm too lazy to rework the compressed font, so I use this to overwrite
