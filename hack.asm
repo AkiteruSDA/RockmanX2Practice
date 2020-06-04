@@ -50,6 +50,7 @@ eval rom_play_sound $008549
 eval rom_nmi_after_controller $0885DB
 eval rom_nmi_after_pushes $7E200B  // Rockman X2 has its NMI handler in RAM
 eval rom_rtl_instruction $808464  // last instruction of rom_play_sound
+eval rom_config_loop $80EAB8
 eval rom_config_button $80EB6D
 eval rom_config_stereo $80EC00
 eval rom_config_exit $80EC48
@@ -783,6 +784,55 @@ copyright_string:
 	dw initial_menu_strings
 {loadpc}
 
+{savepc}
+	// Option Mode position hacks
+
+	// Do not draw borders, only draw highlighted menu headers, move SOUND MODE up
+	{reorg $869038}
+	{option_string .key_config_normal, "KEY CONFIG", $11D6, $34, 1}
+	{reorg $86905B}
+	db $00 // Terminating the string sections immediately with these
+	{reorg $8690AC}
+	db $00
+	{reorg $8690CB}
+	{option_string .key_config_highlighted, "KEY CONFIG", $11D6, $34, 1}
+	{reorg $8690EE}
+	db $00
+	{reorg $86913F}
+	db $00
+	{reorg $86915E}
+	{option_string .sound_mode_normal, "SOUND MODE", $1417, $34, 0}
+	{option_string .misc_normal, "MISC", $151C, $34, 1}
+	{reorg $869181}
+	db $00
+	{reorg $8691A0}
+	db $00
+	{reorg $8691BF}
+	{option_string .sound_mode_highlighted, "SOUND MODE", $1417, $34, 0}
+	{option_string .misc_highlighted, "MISC", $151C, $34, 1}
+	{reorg $8691E2}
+	db $00
+	{reorg $869201}
+	db $00
+
+	//Move STEREO/MONAURAL and EXIT up
+	// Stereo/Mono
+	{reorg $8692B0}
+	dw $1498 >> 1
+	{reorg $8692BD}
+	dw $1498 >> 1
+	{reorg $8692CA}
+	dw $1498 >> 1
+	{reorg $8692D7}
+	dw $1498 >> 1
+
+	// Exit
+	{reorg $86929E}
+	dw $165C >>1
+	{reorg $8692A7}
+	dw $165C >>1
+{loadpc}
+
 // New additions to string table.  This table has reserved entries not being used.
 {savepc}
 	{reorg {rom_bank84_string_table}}
@@ -839,6 +889,15 @@ config_menu_start_hook:
 	bne .string_loop
 	jml $80EA75
 
+// Trampoline for calling $80815F  (flush string draw buffer?)
+trampoline_80815F:
+	pea ({rom_rtl_instruction} - 1) & 0xFFFF
+	jml $80815F
+// Trampoline for calling $808669  (draw string)
+trampoline_808669:
+	pea ({rom_rtl_instruction} - 1) & 0xFFFF
+	jml $808669
+
 // Table of static strings to render at config screen load time.
 config_menu_extra_string_table:
 	// Extra call to 815F to execute and flush the draw buffer before our first
@@ -861,29 +920,8 @@ config_get_stringid_keeprng:
 	adc.b #{stringid_keeprng_off}
 	rts
 
-// Trampoline for calling $80815F  (flush string draw buffer?)
-trampoline_80815F:
-	pea ({rom_rtl_instruction} - 1) & 0xFFFF
-	jml $80815F
-// Trampoline for calling $808669  (draw string)
-trampoline_808669:
-	pea ({rom_rtl_instruction} - 1) & 0xFFFF
-	jml $808669
-
-config_option_jump_table:
-	// These are minus one due to using RTL to jump to them.
-	dl {rom_config_button} - 1
-	dl {rom_config_button} - 1
-	dl {rom_config_button} - 1
-	dl {rom_config_button} - 1
-	dl {rom_config_button} - 1
-	dl {rom_config_button} - 1
-	dl {rom_config_stereo} - 1
-	//dl config_code_keeprng - 1
-	dl {rom_config_exit} - 1
-
 {savepc}
-	// Use our alternate table.
+	// Use our alternate table for unhighlighted string IDs.
 	//DP = 06 here, which is why config_unhighlighted_string_ids is in bank 86 (mirror)
 	{reorg $80EB18}
 	lda.w config_unhighlighted_string_ids,x
@@ -898,62 +936,16 @@ config_unhighlighted_string_ids:
 	db $2B // SELECT_R
 	db $2D // MENU
 	db $2F // STEREO/MONO
-	//db {stringid_keeprng_normal}
+	db {stringid_keeprng_normal}
 	db $2F // EXIT?? Not sure why this isn't different to stereo/mono.
 
 {savepc}
-	// Option Mode position hacks
+	// Increase number of options.
+	{reorg $80EAF4}
+	lda.b #((config_option_jump_table.end - config_option_jump_table) / 3) - 1
+	{reorg $80EAFC}
+	cmp.b #(config_option_jump_table.end - config_option_jump_table) / 3
 
-	// Do not draw borders, only draw highlighted menu headers, move SOUND MODE up
-	{reorg $869038}
-	{option_string .key_config_normal, "KEY CONFIG", $11D6, $34, 1}
-	{reorg $86905B}
-	db $00 // Terminating the string sections immediately with these
-	{reorg $8690AC}
-	db $00
-	{reorg $8690CB}
-	{option_string .key_config_highlighted, "KEY CONFIG", $11D6, $34, 1}
-	{reorg $8690EE}
-	db $00
-	{reorg $86913F}
-	db $00
-	{reorg $86915E}
-	{option_string .sound_mode_normal, "SOUND MODE", $1417, $34, 0}
-	{option_string .misc_normal, "MISC", $151C, $34, 1}
-	{reorg $869181}
-	db $00
-	{reorg $8691A0}
-	db $00
-	{reorg $8691BF}
-	{option_string .sound_mode_highlighted, "SOUND MODE", $1417, $34, 0}
-	{option_string .misc_highlighted, "MISC", $151C, $34, 1}
-	{reorg $8691E2}
-	db $00
-	{reorg $869201}
-	db $00
-
-	//Move STEREO/MONAURAL and EXIT up
-	// Stereo/Mono
-	{reorg $8692B0}
-	dw $1498 >> 1
-	{reorg $8692BD}
-	dw $1498 >> 1
-	{reorg $8692CA}
-	dw $1498 >> 1
-	{reorg $8692D7}
-	dw $1498 >> 1
-
-	// Exit
-	{reorg $86929E}
-	dw $165C >>1
-	{reorg $8692A7}
-	dw $165C >>1
-{loadpc}
-
-// 297 bytes available here. Mirrors $007E77 in the ROM.
-{reorg $80FE77}
-
-{savepc}
 	// Use config_option_jump_table instead of the built-in one.
 	// Note that we can overwrite the config table.
 	{reorg $80EB59}
@@ -968,6 +960,82 @@ config_unhighlighted_string_ids:
 	sep #$20
 	rtl
 {loadpc}
+config_option_jump_table:
+	// These are minus one due to using RTL to jump to them.
+	dl {rom_config_button} - 1
+	dl {rom_config_button} - 1
+	dl {rom_config_button} - 1
+	dl {rom_config_button} - 1
+	dl {rom_config_button} - 1
+	dl {rom_config_button} - 1
+	dl {rom_config_stereo} - 1
+	dl config_code_keeprng - 1
+	dl {rom_config_exit} - 1
+.end:
+
+config_code_keeprng:
+	lda.b #2
+	ldx.b #{sram_config_keeprng} - {sram_config_extra}
+	ldy.b #{stringid_keeprng_off}
+	bra config_extra_toggle
+
+// Shared routines for simple selections.
+// A = number of options available.
+// X = index into sram_config_extra.
+// Y = string ID of default (zero) option.
+config_extra_toggle:
+	// Save A to give us room to work.
+	pha
+	// Was left or right pressed?
+	lda.b {controller_1_new} + 1
+	and.b #$03
+	beq .no_change
+	cmp.b #$03
+	beq .no_change
+	// Determine left versus right.
+	lsr
+	lda.l {sram_config_extra}, x
+	bcc .left
+.right:
+	// Increment the setting.
+	inc
+	cmp 1, s
+	bcc .right_no_overflow
+	lda.b #0
+.right_no_overflow:
+	bra .left_no_underflow
+.left:
+	// Decrement the setting.
+	dec
+	bpl .left_no_underflow
+	lda 1, s
+	dec
+.left_no_underflow:
+	// Save the setting.
+	sta.l {sram_config_extra}, x
+	// Determine the string number by adding Y to A.
+	sta 1, s
+	tya
+	clc
+	adc 1, s
+.draw_string:
+	jsl trampoline_808669
+.no_change:
+	pla   // remove saved A
+	jsl trampoline_80815F
+	jml {rom_config_loop}
+
+// Helper pieces of code for config routines.
+config_helpers:
+.draw_string:
+	jsl trampoline_808669
+.no_change:
+	jsl trampoline_80815F
+	jml {rom_config_loop}
+
+
+// 297 bytes available here. Mirrors $007E77 in the ROM.
+{reorg $80FE77}
 
 // Hack draw_string to use our custom table.
 {savepc}
