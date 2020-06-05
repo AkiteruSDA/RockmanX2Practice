@@ -23,6 +23,14 @@ eval version_minor 3
 eval version_revision 0
 // RAM addresses
 eval config_selected_option $7EFF80
+eval config_data $7EFFC0
+eval config_shot $7EFFC0
+eval config_jump $7EFFC1
+eval config_dash $7EFFC2
+eval config_select_l $7EFFC3
+eval config_select_r $7EFFC4
+eval config_menu $7EFFC5
+eval config_sound $7EFFCA
 eval load_temporary_rng $7F0000
 eval rng_value $7E09D6
 eval title_screen_option $7E003C
@@ -50,6 +58,7 @@ eval rom_play_sound $008549
 eval rom_nmi_after_controller $0885DB
 eval rom_nmi_after_pushes $7E200B  // Rockman X2 has its NMI handler in RAM
 eval rom_rtl_instruction $808464  // last instruction of rom_play_sound
+eval rom_default_config $86F1FA
 eval rom_config_loop $80EAB8
 eval rom_config_button $80EB6D
 eval rom_config_stereo $80EC00
@@ -120,6 +129,8 @@ eval unknown_level_flag_value_normal $01
 eval unknown_level_flag_value_xhunter $FF
 eval magic_sram_tag_lo $454D  // Combined, these say "MEOW"
 eval magic_sram_tag_hi $574F
+eval magic_config_tag_lo $5741  // Combined, these say "AWOO"
+eval magic_config_tag_hi $4F4F
 
 {savepc}
 	// Change SRAM size to 256 KB
@@ -1884,5 +1895,150 @@ nmi_hook:
 	inx
 	jmp ($FFFE,x)
 
+// Returns whether configuration is saved in the zero flag.
+// Must be called with 16-bit A!
+is_config_saved:
+	// Check magic values.
+	lda.l {sram_config_valid}
+	cmp.w #{magic_config_tag_lo}
+	bne .not_saved
+	lda.l {sram_config_valid} + 2
+	cmp.w #{magic_config_tag_hi}
+	bne .not_saved
 
+	// Check for bad extra configuration.
+	// These are simple Boolean flags. (only one right now)
+	sep #$20
+	lda.l {sram_config_keeprng}
+	and.b #~($01)
+	rep #$20
+	bne .not_saved
+.not_saved:
+	rts
+
+// Hook the initialization of the configuration data, to provide saving
+// the configuration in SRAM.
+{savepc}
+	{reorg $8082A7}
+	// config_init_hook changes the bank.
+	phb
+	jsl config_init_hook
+	plb
+	bra $8082B4
+{loadpc}
+config_init_hook:
+	// The controller configuration was not in RAM, so initialize it.
+	// We want to use the data from SRAM in this case - if any.
+	rep #$30
+	jsr is_config_saved
+	bne .not_saved
+
+	// Config was saved, so load from SRAM.
+	lda.w #({sram_config_game} >> 16)
+	ldy.w #{sram_config_game}
+	bra .initialize
+
+.not_saved:
+	// Config was not saved, so set to default.
+	// Set our extra config to default.
+	sep #$30
+	lda.b #0
+	ldx.b #0
+.extra_default_loop:
+	sta.l {sram_config_extra}, x
+	inx
+	cpx.b #{sram_config_extra_size}
+	bne .extra_default_loop
+	rep #$30
+
+	// Copy from ROM's default config to game config.
+	lda.w #({rom_default_config} >> 16)
+	ldy.w #{rom_default_config}
+
+.initialize:
+	// Keep X/Y at 16-bit for now.
+	sep #$20
+	// Set bank as specified.
+	pha
+	plb
+	// Copy configuration from either ROM or SRAM.
+	ldx.w #0
+.initialize_loop:
+	lda $0000, y
+	sta.l {config_data}, x
+	iny
+	inx
+	cpx.w #{game_config_size}
+	bcc .initialize_loop
+
+	// Save configuration if needed.
+	sep #$30
+	bra maybe_save_config
+
+// Hook the config menu to save automatically.
+{savepc}
+	{reorg $80EAB8}
+	jml config_menu_hook
+{loadpc}
+config_menu_hook:
+	// Save config if anything changed.
+	jsl maybe_save_config
+	// Deleted code.
+	lda.l $7EFF80
+	jml $80EABC
+
+
+// Save configuration if different or unset.
+// Called with JSL.
+maybe_save_config:
+	php
+
+	// If config not saved at all, save now.
+	rep #$20
+	jsr is_config_saved
+	sep #$30
+	bne .do_save
+
+	// Otherwise, check whether different.
+	// It's bad to continuously write to SRAM because an SD2SNES will then
+	// constantly write to the SD card.
+	ldx.b #0
+.check_loop:
+	lda.l {config_data}, x
+	cmp.l {sram_config_game}, x
+	bne .do_save
+	inx
+	cpx.b #{game_config_size}
+	bcc .check_loop
+
+.return:
+	plp
+	rtl
+
+	// We should save.
+.do_save:
+	// Clear the magic value during the save.
+	rep #$20
+	lda.w #0
+	sta.l {sram_config_valid} + 0
+	sta.l {sram_config_valid} + 2
+	// Copy config to SRAM.
+	sep #$30
+	ldx.b #0
+.save_loop:
+	lda.l {config_data}, x
+	sta.l {sram_config_game}, x
+	inx
+	cpx.b #{game_config_size}
+	bcc .save_loop
+
+	// Set the magic value.
+	rep #$20
+	lda.w #{magic_config_tag_lo}
+	sta.l {sram_config_valid} + 0
+	lda.w #{magic_config_tag_hi}
+	sta.l {sram_config_valid} + 2
+
+	// Done.
+	bra .return
 {loadpc}
