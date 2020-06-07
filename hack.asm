@@ -1036,14 +1036,6 @@ config_extra_toggle:
 	jsl trampoline_80815F
 	jml {rom_config_loop}
 
-// Helper pieces of code for config routines.
-config_helpers:
-.draw_string:
-	jsl trampoline_808669
-.no_change:
-	jsl trampoline_80815F
-	jml {rom_config_loop}
-
 
 // 297 bytes available here. Mirrors $007E77 in the ROM.
 {reorg $80FE77}
