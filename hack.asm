@@ -246,6 +246,13 @@ patch_infinite_lives:
 	nop
 {loadpc}
 
+{savepc}
+	//Hold X to disable Stag and Centipede capsules when refight room is loading
+	{reorg $2AF187}
+	jsl disable_stag_centipede
+	nop
+	nop
+{loadpc}
 
 {savepc}
 	{reorg $009A6A}
@@ -1035,6 +1042,31 @@ config_extra_toggle:
 	pla   // remove saved A
 	jsl trampoline_80815F
 	jml {rom_config_loop}
+
+disable_stag_centipede:
+	txa
+	// Check for Stag capsule
+	cmp.b #5
+	beq .new_code
+	// Check for Centipede capsule
+	cmp.b #6
+	beq .new_code
+	jmp .original_code
+.new_code:
+	// Check for X button input
+	lda.l {controller_1_current}
+	and.b #$40
+	cmp.b #$40
+	bne .original_code
+	lda.b #1 // Unset zero flag
+	jmp .done
+.original_code:
+	lda.w $E699,x
+	bit $1FD9
+.done:
+	// returning from here with zero flag set enables capsule,
+	// and unset disables it
+	rtl
 
 
 // 297 bytes available here. Mirrors $007E77 in the ROM.
