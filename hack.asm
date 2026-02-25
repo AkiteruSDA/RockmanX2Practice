@@ -328,18 +328,18 @@ patch_death_command_hook:
 	{reorg $0090E2}
 	// Change where Rockman starts on the title screen, which is hardcoded.
 patch_title_rockman_default_location:
-	lda.b #$96
+	lda.b #$86
 {loadpc}
 
 
 {savepc}
-	// Make the number of title screen options 4 instead of 3.
+	// Make the number of title screen options 5 instead of 3.
 	{reorg $00915F}
 patch_title_num_options_up:
-	lda.b #3
+	lda.b #4
 	{reorg $00916A}
 patch_title_num_options_down:
-	cmp.b #4
+	cmp.b #5
 {loadpc}
 
 
@@ -350,7 +350,7 @@ patch_title_num_options_down:
 	// among those.  So a simple compare will suffice here!
 	{reorg $0091FF}
 patch_title_option_jump_table:
-	cmp.b #3
+	cmp.b #4
 	beq $00923A
 	bra $00920A
 {loadpc}
@@ -604,6 +604,32 @@ route_table_bank_marker:
 level_id_to_route_table_map:
 	db $FF, 2, 1, 7, 4, 5, 10, 6, 9
 
+route_table_allstages:
+	// For stage select
+	dw state_data_allstages.sponge
+	// Without select button
+	dw state_data_allstages.sponge
+	dw state_data_allstages.moth
+	dw 0  // placeholder for the X
+	dw state_data_allstages.stag
+	dw state_data_allstages.centipede
+	dw state_data_allstages.ostrich
+	dw state_data_allstages.crab
+	dw state_data_allstages.intro
+	dw state_data_allstages.gator
+	dw state_data_allstages.snail
+	// With select button
+	dw state_data_allstages.violen               // \   These ones are replaced
+	dw state_data_allstages.serges               //  \  versus normal.
+	dw state_data_allstages.agile                //   > X becomes Agile.
+	dw state_data_allstages.teleporter           //  /
+	dw state_data_allstages.sigma                // /
+	dw state_data_allstages.ostrich
+	dw state_data_allstages.crab
+	dw state_data_allstages.intro
+	dw state_data_allstages.gator
+	dw state_data_allstages.snail
+
 route_table_anypercent:
 	// For stage select
 	dw state_data_anypercent.sponge
@@ -684,6 +710,7 @@ route_table_lowpercent:
 
 
 route_metatable:
+	dw route_table_allstages
 	dw route_table_anypercent
 	dw route_table_100percent
 	dw route_table_lowpercent
@@ -722,11 +749,12 @@ initial_menu_strings:
 		db (({col7} & 1) << 7) | (({col6} & 1) << 6) | (({col5} & 1) << 5) | (({col4} & 1) << 4) | (({col3} & 1) << 3) | (({col2} & 1) << 2) | (({col1} & 1) << 1) | ({col0} & 1)
 	endmacro
 
-	macro optionset label, attrib1, attrib2, attrib3, attrib4
-		{option_string .option1_{label}, "ANY`", $1492, {attrib1}, 0}
-		{option_string .option2_{label}, "100`", $1512, {attrib2}, 0}
-		{option_string .option3_{label}, "LOW`", $1592, {attrib3}, 0}
-		{option_string .option4_{label}, "OPTIONS", $1612, {attrib4}, 1}
+	macro optionset label, attrib1, attrib2, attrib3, attrib4, attrib5
+		{option_string .option1_{label}, "ALL STAGES", $1412, {attrib1}, 0}
+		{option_string .option2_{label}, "ANY`", $1492, {attrib2}, 0}
+		{option_string .option3_{label}, "100`", $1512, {attrib3}, 0}
+		{option_string .option4_{label}, "LOW`", $1592, {attrib4}, 0}
+		{option_string .option5_{label}, "OPTIONS", $1612, {attrib5}, 1}
 	endmacro
 
 	{tilerow $0600, 0,   0,2,3,0,0,0,2,3}
@@ -745,16 +773,19 @@ initial_menu_strings:
 
 // Option set 1 can be overlapped with the tail of initial_menu_strings.
 option_set_1:
-	{optionset s1, $24, $20, $20, $20}
+	{optionset s1, $24, $20, $20, $20, $20}
 	db 0
 option_set_2:
-	{optionset s2, $20, $24, $20, $20}
+	{optionset s2, $20, $24, $20, $20, $20}
 	db 0
 option_set_3:
-	{optionset s3, $20, $20, $24, $20}
+	{optionset s3, $20, $20, $24, $20, $20}
 	db 0
 option_set_4:
-	{optionset s4, $20, $20, $20, $24}
+	{optionset s4, $20, $20, $20, $24, $20}
+	db 0
+option_set_5:
+	{optionset s4, $20, $20, $20, $20, $24}
 	db 0
 
 // Replacement copyright string.  @ in the X2 font is the copyright symbol.
@@ -779,7 +810,7 @@ copyright_string:
 	db .version_end - .version_start, $20
 	dw $14CF >> 1
 .version_start:
-	db "2014-2020 Ver. "
+	db "2014-2026 Ver. "
 	db $30 + {version_major}, '.', $30 + {version_minor}, $30 + {version_revision}
 .version_end:
 	// Terminates sequence of VRAM strings.
@@ -1112,6 +1143,93 @@ draw_string_hack:
 // Use this label >> 16 as the bank for state data blocks.
 state_data_bank_marker:
 
+// State data for All Stages
+state_data_allstages:
+.intro:
+	//  0. Intro stage
+	db $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
+	db $00,$00,$00,$02,$00,$01,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
+	db $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$DC
+	db $00,$10,$00,$00,$01,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$58
+.sponge:
+	//  1. Wire Sponge's stage
+	db $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$02,$00,$40
+	db $00,$00,$00,$02,$00,$01,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
+	db $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$DC
+	db $00,$10,$01,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$58
+.gator:
+	//  2. Wheel Gator's stage
+	db $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$08,$00,$40
+	db $00,$00,$00,$02,$00,$01,$8E,$00,$00,$00,$00,$00,$00,$00,$00,$00
+	db $00,$00,$00,$00,$00,$DC,$00,$00,$00,$00,$00,$00,$00,$00,$00,$DC
+	db $40,$12,$01,$80,$00,$48,$00,$00,$00,$00,$00,$00,$00,$00,$00,$58
+.stag:
+	//  3. Flame Stag's stage
+	db $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$04,$00,$40
+	db $00,$00,$00,$02,$00,$01,$8E,$00,$00,$00,$00,$00,$00,$00,$00,$00
+	db $00,$DC,$00,$00,$00,$DC,$00,$00,$00,$00,$00,$00,$00,$00,$00,$DC
+	db $42,$14,$01,$A0,$00,$1B,$01,$04,$07,$00,$00,$00,$00,$00,$00,$58
+.centipede:
+	//  4. Magna Centipede's stage
+	db $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$05,$00,$40
+	db $00,$00,$00,$02,$00,$01,$8E,$8E,$00,$00,$00,$00,$00,$00,$00,$00
+	db $00,$DC,$00,$00,$00,$DC,$00,$00,$00,$DC,$00,$00,$00,$00,$00,$DC
+	db $62,$16,$01,$A2,$00,$24,$03,$00,$01,$00,$00,$00,$00,$00,$00,$58
+.snail:
+	//  5. Crystal Snail's stage
+	db $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$06,$00,$40
+	db $00,$00,$00,$02,$00,$01,$8E,$8E,$8E,$00,$00,$00,$00,$00,$00,$00
+	db $00,$DC,$00,$00,$00,$DC,$00,$DC,$00,$DC,$00,$00,$00,$00,$00,$DC
+	db $72,$18,$01,$AA,$00,$51,$06,$00,$03,$00,$00,$00,$00,$00,$00,$58
+.ostrich:
+	//  6. Overdrive Ostrich's stage
+	db $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$07,$00,$40
+	db $00,$00,$00,$02,$00,$01,$8E,$8E,$8E,$00,$00,$DC,$00,$00,$00,$00
+	db $00,$DC,$00,$00,$00,$DC,$00,$DC,$00,$DC,$00,$00,$00,$DC,$00,$DC
+	db $73,$1A,$01,$BA,$00,$2D,$00,$00,$07,$00,$00,$00,$00,$00,$00,$58
+.crab:
+	//  7. Bubble Crab's stage
+	db $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$03,$00,$40
+	db $00,$00,$00,$02,$00,$01,$8E,$8E,$8E,$00,$00,$DC,$00,$00,$00,$00
+	db $00,$DC,$00,$DC,$00,$DC,$00,$DC,$00,$DC,$00,$00,$00,$DC,$00,$DC
+	db $7B,$1C,$01,$BE,$00,$36,$00,$00,$00,$00,$00,$00,$00,$00,$00,$58
+.moth:
+	//  8. Morph Moth's stage
+	db $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$01,$00,$40
+	db $00,$00,$00,$02,$00,$01,$8E,$8E,$8E,$8E,$00,$DC,$00,$DC,$00,$00
+	db $00,$DC,$00,$DC,$00,$DC,$00,$DC,$00,$DC,$00,$00,$00,$DC,$00,$DC
+	db $FB,$1E,$01,$FE,$00,$09,$00,$00,$00,$00,$00,$00,$00,$00,$00,$58
+.violen:
+	//  9. Violen's stage
+	db $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$09,$00,$E0
+	db $00,$00,$00,$03,$00,$01,$8E,$8E,$8E,$8E,$00,$DC,$00,$DC,$00,$DC
+	db $00,$DC,$00,$DC,$00,$DC,$00,$DC,$00,$DC,$00,$DC,$00,$DC,$00,$DC
+	db $FF,$20,$01,$FF,$01,$3F,$00,$00,$00,$00,$00,$00,$00,$00,$00,$58
+.serges:
+	// 10. Serges's stage
+	db $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$0A,$01,$E0
+	db $00,$00,$00,$03,$00,$01,$8E,$8E,$8E,$8E,$00,$DC,$00,$DC,$00,$DC
+	db $00,$DC,$00,$DC,$00,$DC,$00,$DC,$00,$DC,$00,$5C,$00,$DC,$00,$DC
+	db $FF,$20,$01,$FF,$01,$3F,$00,$00,$00,$00,$00,$00,$00,$00,$00,$58
+.agile:
+	// 11. Agile's stage
+	db $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$0B,$02,$E0
+	db $00,$00,$00,$03,$00,$01,$8E,$8E,$8E,$8E,$00,$DC,$00,$DC,$00,$DC
+	db $00,$DC,$00,$DC,$00,$DC,$00,$DC,$00,$DC,$00,$5C,$00,$DC,$00,$DC
+	db $FF,$20,$01,$FF,$01,$3F,$00,$00,$00,$00,$00,$00,$00,$00,$00,$58
+.teleporter:
+	// 12. Boss Repeats ("Teleporter" stage)
+	db $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$0C,$03,$E0
+	db $00,$80,$00,$04,$00,$01,$8E,$8E,$8E,$8E,$00,$DC,$00,$DC,$00,$DC
+	db $00,$DC,$00,$DC,$00,$DC,$00,$DC,$00,$DC,$00,$5C,$00,$DC,$00,$DC
+	db $FF,$20,$01,$FF,$01,$3F,$00,$00,$00,$00,$00,$00,$00,$00,$00,$58
+.sigma:
+	// 13. Sigma (Magna Centipede redux)
+	db $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$05,$04,$E0
+	db $00,$80,$00,$04,$00,$01,$8E,$8E,$8E,$8E,$00,$DC,$00,$DC,$00,$DC
+	db $00,$DC,$00,$DC,$00,$DC,$00,$DC,$00,$DC,$00,$5C,$00,$DC,$00,$DC
+	db $FF,$20,$01,$FF,$01,$3F,$00,$00,$00,$FF,$00,$00,$00,$00,$00,$58
+
 // State data for Any%
 state_data_anypercent:
 .intro:
@@ -1382,10 +1500,11 @@ title_screen_string_table:
 	dw option_set_2
 	dw option_set_3
 	dw option_set_4
+	dw option_set_5
 
 // Y coordinates of Rockman corresponding to each option.
 title_rockman_location:
-	db $96, $A6, $B6, $C6
+	db $86, $96, $A6, $B6, $C6
 
 {loadpc}
 
